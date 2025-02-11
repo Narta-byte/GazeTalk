@@ -30,12 +30,6 @@ function App() {
       setSuggestions([]);
       return;
     }
-    if (textValue.endsWith(".")) {
-      const lastSentence = getLastSentence(textValue);
-      if (lastSentence) {
-        speakText(lastSentence);
-      }
-    }
     const prompt = textValue;
 
     const fetchSuggestions = async () => {
@@ -58,15 +52,14 @@ function App() {
 
   const handleTextAreaChange = (e) => {
     setTextValue(e.target.value);
-    setCursorPosition(e.target.selectionStart);
   };
-
+  // gets the sentence before the cursor
   const getLastSentence = (text) => {
-    const sentences = text.split(".").map(s => s.trim()).filter(s => s.length > 0);
-    if (sentences.length > 0) {
-      return sentences[sentences.length - 1]; 
+    let start = globalCursorPosition.value
+    while (start > 0 && text[start-1] !== ".") {
+      start--;
     }
-    return text.trim(); 
+    return text.slice(start, globalCursorPosition.value)
   };
 
   const speakText = (text) => {
@@ -103,6 +96,17 @@ function App() {
       
 
       
+
+    } else if(action.type === "end_sentence") {
+      const lastSentence = getLastSentence(textValue);
+      console.log("last sentence : ", lastSentence)
+      if (lastSentence) {
+        speakText(lastSentence);
+      }
+      const newText = textValue.slice(0, globalCursorPosition.value) + "." + textValue.slice(globalCursorPosition.value);
+      setTextValue(newText);
+      updateGlobalCursorPosition(input.selectionStart + 1);
+      setCurrentLayoutName("writing");
 
     } else if (action.type === "newline") {
       // insert a newline at the global cursor position
@@ -246,7 +250,6 @@ function App() {
         const newPos = input.value.length;
         input.focus();
         input.setSelectionRange(newPos, newPos);
-        setCursorPosition(newPos);
       }, 0);
 
 

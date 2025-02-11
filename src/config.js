@@ -98,9 +98,9 @@ export const config = {
           colspan: 2 // This tile spans 2 columns
         },
         {
-          type: "letter",
+          type: "end_sentence",
           label: ".",
-          action: { type: "enter_letter", value: "." }
+          action: { type: "end_sentence"}
         },
         {
           type: "switch",
