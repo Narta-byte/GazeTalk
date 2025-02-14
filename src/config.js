@@ -232,6 +232,11 @@ export const config = {
           type: "switch",
           label: "change language",
           action: { type: "switch_layout", layout: "edit_language" }
+        },
+        {
+          type : "calibrate",
+          label : "calibrate",
+          action : {type: "calibrate"}
         }
       ]
     },
@@ -360,8 +365,8 @@ export const config = {
         },
         {
           type: "switch",
-          label: "2+4x2",
-          action: { type: "choose_button_layout", value: "2+4x2" }
+          label: "back",
+          action: { type: "switch_layout", layout: "main_menu" }
         },
         {
           type: "switch",

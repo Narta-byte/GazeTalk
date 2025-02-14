@@ -1,4 +1,4 @@
-import React, {  useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { config } from './config';
 import settings from './settings.json';
@@ -6,6 +6,12 @@ import { useTranslation } from 'react-i18next';
 import { changeLanguage } from 'i18next';
 import './App.css';
 import globalCursorPosition from './cursorSingleton';
+import currentCursorxy from './cursorSingleton';
+import turnedOn from './cursorSingleton';
+import PlottingCanvas from './plotting_canvas';
+// import { Restart } from './webgazer_utils';
+import { docLoad, Restart } from './webgazer_utils';
+
 var dwellTime = 500; // 0.5 seconds
 
 function App() {
@@ -22,8 +28,67 @@ function App() {
   const [showSuggestions, setShowSuggestions] = useState(false);
 
 
-
   const input = document.getElementById('text_region');
+  
+  const [isDocLoaded, setIsDocLoaded] = useState(false);
+  // useEffect(() => {
+  //   console.log("i start here")
+    
+  //   // if (!isDocLoaded) {
+  //   //   setIsDocLoaded(true)
+  //   //   return;
+  //   // }
+  //   // console.log("i am here")
+  //   // const webgazerVideoContainer = document.getElementById("webgazerVideoContainer")
+  //   // debugger
+    
+  //   // if (webgazerVideoContainer) {
+  //   //   console.log("i exist")
+  //   //   return
+  //   // }
+  //   const webgazer=window.webgazer
+  //   webgazer.setGazeListener((data, clock) => {
+  //     // console.log(data,clock)
+  //   }).begin()
+  // }, []);
+
+const [gazeX, setGazeX] = useState(null);
+const [gazeY, setGazeY] = useState(null);
+useEffect(() => {
+  console.log("hello")
+      const canvas = document.getElementById('plotting_canvas');
+      if (isDocLoaded) {
+        docLoad();
+        setIsDocLoaded(false);
+      }
+      
+        if (canvas) {
+          // Restart(); // Initialize webgazer after the canvas is available
+          webgazer
+            .setRegression('ridge')
+            .setTracker('TFFacemesh')
+            .showVideoPreview(true)
+            .setGazeListener((data, clock) => {
+              if (data) {
+                const x = data.x
+                const y = data.y
+                const element = document.elementFromPoint(x,y)
+                if (!element) return;
+                if (element.className === "tile") {
+                  if (data) {
+                    console.log("setting xy")
+                    setGazeX(data.x);
+                    setGazeY(data.y);
+                    currentCursorxy.x = data.x
+                    currentCursorxy.y = data.y
+                  }
+                }
+              }
+            })
+            
+            .begin();
+        }
+    }, []);
 
   React.useEffect(() => {
     if (textValue.trim() === "") {
@@ -260,6 +325,8 @@ function App() {
       changeLanguage(action.value);
     } else if (action.type === "change_linger_time") {
       dwellTime = parseFloat(action.value);
+    } else if (action.type === "calibrate") {
+      Restart()
     }
 
     function deleteWordAtCursor() {
@@ -352,7 +419,7 @@ function App() {
   }
   return (
     <div className="App">
-     <KeyboardGrid 
+      <KeyboardGrid 
         layout={layout} 
         textValue={textValue} 
         setTextValue={setTextValue}
@@ -361,10 +428,11 @@ function App() {
         handleTextAreaChange={handleTextAreaChange}
         textAreaRef={textAreaRef}
       />
-          {alarmActive && (
-            <AlarmPopup onClose={() => setAlarmActive(false)} />
-          )}
-          </div>
+      {alarmActive && (
+        <AlarmPopup onClose={() => setAlarmActive(false)} />
+      )}
+      <PlottingCanvas />
+    </div>
   );
 }
 function getCurrentLine(currentLines, cursorPosition) {
@@ -479,14 +547,16 @@ function KeyboardGrid({ layout, textValue, setTextValue, onTileActivate, suggest
           if (tile.type === "textarea") {
             return null;
           }
-          return <Tile key={i} tile={tile} onActivate={handleTileActivate} />;
+          return <Tile  key={i} tile={tile} onActivate={handleTileActivate} gazeX={currentCursorxy.x}  gazeY={currentCursorxy.y}/>;
         })
       )}
+      
+      
     </div>
   );
 }
 
-function WritingLayoutTiles({ layout, textValue, suggestions = [], onTileActivate, showSuggestions }) {
+function WritingLayoutTiles({ layout, textValue, suggestions = [], onTileActivate, showSuggestions, gazeX,gazeY }) {
   const tilesCopy = [...layout.tiles];
 
   if (showSuggestions) {
@@ -517,7 +587,7 @@ function WritingLayoutTiles({ layout, textValue, suggestions = [], onTileActivat
     <>
       {tilesCopy.map((tile, i) => {
         if (tile.type === "textarea") return null;
-        return <Tile key={i} tile={tile} onActivate={onTileActivate} />;
+        return <Tile key={i} tile={tile} onActivate={onTileActivate} gazeX={currentCursorxy.x} gazeY={currentCursorxy.y}/>;
       })}
     </>
   );
@@ -539,7 +609,7 @@ function SuggestionsLayoutTiles({ layout, suggestions, onTileActivate }) {
     <>
       {finalTiles.map((tile, i) => {
         if (tile.type === "textarea") return null;
-        return <Tile key={i} tile={tile} onActivate={onTileActivate} />;
+        return <Tile key={i} tile={tile} onActivate={onTileActivate} gazeX={currentCursorxy.x} gazeY={currentCursorxy.y}/>;
       })}
     </>
   );
@@ -583,10 +653,12 @@ function TextAreaTile({ value, onChange, colspan=2 }) {
 
 
 
-function Tile({ tile, onActivate }) {
+function Tile({ tile, onActivate, gazeX, gazeY }) {
   const {t} = useTranslation();
   const [hovering, setHovering] = useState(false);
   const [progress, setProgress] = useState(100);
+  const tileRef = useRef(null);
+  // const dwellTime = 2000; // Adjust dwell time in milliseconds
 
   // Calculate positions for surrounding letters
   const positions = [
@@ -597,6 +669,23 @@ function Tile({ tile, onActivate }) {
     { bottom: '10%', left: '50%' },  // Bottom-center
     { bottom: '10%', right: '10%' } // Bottom-right
   ];
+  useEffect(() => {
+    if (!turnedOn.isOn) return
+    console.log("button hit")
+    console.log("stuff : ", tileRef.current)
+    console.log("gaze : ", currentCursorxy)
+    if (!tileRef.current || currentCursorxy.x === null || currentCursorxy.y === null) return;
+
+    const rect = tileRef.current.getBoundingClientRect();
+    const isInside =
+      gazeX >= rect.left &&
+      gazeX <= rect.right &&
+      gazeY >= rect.top &&
+      gazeY <= rect.bottom;
+
+    setHovering(isInside);
+    console.log("is it hovering : ", isInside)
+  }, [gazeX, gazeY]);
 
   React.useEffect(() => {
     let timer;
@@ -625,6 +714,7 @@ function Tile({ tile, onActivate }) {
 
   return (
     <div 
+      ref={tileRef}
       className="tile"
       style={tile.customStyle || {}}
       onMouseEnter={() => setHovering(true)}
